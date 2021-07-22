@@ -17,6 +17,7 @@
 package org.springframework.cloud.deployer.spi.scheduler.cloudfoundry;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -88,7 +89,10 @@ public class SpringCloudSchedulerIntegrationIT extends AbstractSchedulerIntegrat
 
 	@Override
 	protected Map<String, String> getDeploymentProperties() {
-		return Collections.singletonMap(CloudFoundryDeploymentProperties.SERVICES_PROPERTY_KEY, deployerProps);
+		Map<String, String> deploymentProperties = new HashMap<>();
+		deploymentProperties.put(CloudFoundryDeploymentProperties.SERVICES_PROPERTY_KEY, deployerProps);
+		deploymentProperties.put(CloudFoundryAppScheduler.CRON_EXPRESSION_KEY, "57 13 ? * *");
+		return deploymentProperties;
 	}
 
 	@Override
@@ -129,11 +133,11 @@ public class SpringCloudSchedulerIntegrationIT extends AbstractSchedulerIntegrat
 		@ConditionalOnMissingBean
 		public ReactorSchedulerClient reactorSchedulerClient(ConnectionContext context,
 				TokenProvider passwordGrantTokenProvider,
-				CloudFoundrySchedulerProperties properties) {
+				CloudFoundryDeploymentProperties taskDeploymentProperties) {
 			return ReactorSchedulerClient.builder()
 					.connectionContext(context)
 					.tokenProvider(passwordGrantTokenProvider)
-					.root(Mono.just(properties.getSchedulerUrl()))
+					.root(Mono.just(taskDeploymentProperties.getSchedulerUrl()))
 					.build();
 		}
 
@@ -143,16 +147,11 @@ public class SpringCloudSchedulerIntegrationIT extends AbstractSchedulerIntegrat
 				CloudFoundryOperations operations,
 				CloudFoundryConnectionProperties properties,
 				TaskLauncher taskLauncher,
-				CloudFoundrySchedulerProperties schedulerProperties) {
+				CloudFoundryDeploymentProperties taskDeploymentProperties) {
 			return new CloudFoundryAppScheduler(client, operations, properties,
 					(CloudFoundryTaskLauncher) taskLauncher,
-					schedulerProperties);
+					taskDeploymentProperties);
 		}
 
-		@Bean
-		@ConditionalOnMissingBean
-		public CloudFoundrySchedulerProperties cloudFoundrySchedulerProperties() {
-			return new CloudFoundrySchedulerProperties();
-		}
 	}
 }

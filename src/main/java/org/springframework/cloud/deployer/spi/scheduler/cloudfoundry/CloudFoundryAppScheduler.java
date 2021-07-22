@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2019 the original author or authors.
+ * Copyright 2018-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import org.springframework.cloud.deployer.spi.cloudfoundry.CloudFoundryConnectionProperties;
+import org.springframework.cloud.deployer.spi.cloudfoundry.CloudFoundryDeploymentProperties;
 import org.springframework.cloud.deployer.spi.cloudfoundry.CloudFoundryTaskLauncher;
 import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
 import org.springframework.cloud.deployer.spi.scheduler.CreateScheduleException;
@@ -70,6 +71,8 @@ import org.springframework.retry.support.RetryTemplate;
  */
 public class CloudFoundryAppScheduler implements Scheduler {
 
+	public final static String CRON_EXPRESSION_KEY = "spring.cloud.deployer.cloudfoundry.cron.expression";
+
 	private final static int PCF_PAGE_START_NUM = 1; //First PageNum for PCFScheduler starts at 1.
 
 	private final static int MAX_SCHEDULE_NAME_LENGTH = 255;
@@ -82,7 +85,9 @@ public class CloudFoundryAppScheduler implements Scheduler {
 	private final CloudFoundryConnectionProperties properties;
 	private final CloudFoundryTaskLauncher taskLauncher;
 	private final CloudFoundrySchedulerProperties schedulerProperties;
+	private final CloudFoundryDeploymentProperties deploymentProperties;
 
+	@Deprecated
 	public CloudFoundryAppScheduler(SchedulerClient client, CloudFoundryOperations operations,
 			CloudFoundryConnectionProperties properties, CloudFoundryTaskLauncher taskLauncher,
 			CloudFoundrySchedulerProperties schedulerProperties) {
@@ -97,6 +102,29 @@ public class CloudFoundryAppScheduler implements Scheduler {
 		this.properties = properties;
 		this.taskLauncher = taskLauncher;
 		this.schedulerProperties = schedulerProperties;
+
+		this.deploymentProperties = new CloudFoundryDeploymentProperties();
+		this.deploymentProperties.setSchedulerUrl(this.schedulerProperties.getSchedulerUrl());
+		this.deploymentProperties.setScheduleSSLRetryCount(this.schedulerProperties.getScheduleSSLRetryCount());
+		this.deploymentProperties.setScheduleTimeoutInSeconds(this.schedulerProperties.getScheduleTimeoutInSeconds());
+		this.deploymentProperties.setUnScheduleTimeoutInSeconds(this.schedulerProperties.getScheduleTimeoutInSeconds());
+		this.deploymentProperties.setListTimeoutInSeconds(this.schedulerProperties.getListTimeoutInSeconds());
+	}
+	public CloudFoundryAppScheduler(SchedulerClient client, CloudFoundryOperations operations,
+			CloudFoundryConnectionProperties properties, CloudFoundryTaskLauncher taskLauncher,
+			CloudFoundryDeploymentProperties deploymentProperties) {
+		Assert.notNull(client, "client must not be null");
+		Assert.notNull(operations, "operations must not be null");
+		Assert.notNull(properties, "properties must not be null");
+		Assert.notNull(taskLauncher, "taskLauncher must not be null");
+		Assert.notNull(deploymentProperties, "deployment must not be null");
+
+		this.client = client;
+		this.operations = operations;
+		this.properties = properties;
+		this.taskLauncher = taskLauncher;
+		this.deploymentProperties = deploymentProperties;
+		this.schedulerProperties = null;
 	}
 
 	@Override
@@ -105,25 +133,38 @@ public class CloudFoundryAppScheduler implements Scheduler {
 		String scheduleName = scheduleRequest.getScheduleName();
 		logger.debug(String.format("Scheduling: %s", scheduleName));
 
-		if(scheduleName.length() > MAX_SCHEDULE_NAME_LENGTH) {
+		if (scheduleName.length() > MAX_SCHEDULE_NAME_LENGTH) {
 			throw new CreateScheduleException(String.format("Schedule can not be created because its name " +
 							"'%s' has too many characters.  Schedule name length" +
 							" must be %s characters or less.",
-							scheduleName, MAX_SCHEDULE_NAME_LENGTH), null);
+					scheduleName, MAX_SCHEDULE_NAME_LENGTH), null);
 		}
 
-		String command = stageTask(scheduleRequest);
-
-		String cronExpression = scheduleRequest.getSchedulerProperties().get(SchedulerPropertyKeys.CRON_EXPRESSION);
-		Assert.hasText(cronExpression, String.format(
-				"request's scheduleProperties must have a %s that is not null nor empty",
-				SchedulerPropertyKeys.CRON_EXPRESSION));
+		String cronExpressionCandidate = null;
+		if (cronExpressionCandidate == null && scheduleRequest.getSchedulerProperties() != null) {
+			cronExpressionCandidate = scheduleRequest.getSchedulerProperties().get(SchedulerPropertyKeys.CRON_EXPRESSION);
+		}
+		else if (cronExpressionCandidate == null && scheduleRequest.getDeploymentProperties().get("spring.cloud.scheduler.cron.expression") != null) {
+			cronExpressionCandidate = scheduleRequest.getDeploymentProperties().get("spring.cloud.scheduler.cron.expression");
+		}
+		else if (cronExpressionCandidate == null && scheduleRequest.getDeploymentProperties().get("spring.cloud.deployer.cron.expression") != null) {
+			cronExpressionCandidate = scheduleRequest.getDeploymentProperties().get("spring.cloud.deployer.cron.expression");
+		}
+		else if (scheduleRequest.getDeploymentProperties().get(CRON_EXPRESSION_KEY) != null) {
+			cronExpressionCandidate = scheduleRequest.getDeploymentProperties().get(CRON_EXPRESSION_KEY);
+		}
+		Assert.hasText(cronExpressionCandidate, String.format(
+				"request's scheduleProperties must have a %s or %s that is not null nor empty",
+				SchedulerPropertyKeys.CRON_EXPRESSION, CRON_EXPRESSION_KEY));
+		String cronExpression = cronExpressionCandidate;
 		try {
 			new QuartzCronExpression("0 " + cronExpression);
 		}
 		catch(ParseException pe) {
 			throw new CreateScheduleException("Cron Expression is invalid: " + pe.getMessage(), pe);
 		}
+		String command = stageTask(scheduleRequest);
+
 		retryTemplate().execute(new RetryCallback<Void, RuntimeException>() {
 					@Override
 					public Void doWithRetry(RetryContext retryContext) throws RuntimeException {
@@ -156,7 +197,7 @@ public class CloudFoundryAppScheduler implements Scheduler {
 		this.client.jobs().delete(DeleteJobRequest.builder()
 				.jobId(getJob(scheduleName))
 				.build())
-				.block(Duration.ofSeconds(schedulerProperties.getUnScheduleTimeoutInSeconds()));
+				.block(Duration.ofSeconds(this.deploymentProperties.getUnScheduleTimeoutInSeconds()));
 	}
 
 	@Override
@@ -172,7 +213,7 @@ public class CloudFoundryAppScheduler implements Scheduler {
 		for (int i = PCF_PAGE_START_NUM; i <= getJobPageCount(); i++) {
 			List<ScheduleInfo> scheduleInfoPage = getSchedules(i)
 					.collectList()
-					.block(Duration.ofSeconds(schedulerProperties.getListTimeoutInSeconds()));
+					.block(Duration.ofSeconds(this.deploymentProperties.getListTimeoutInSeconds()));
 			if(scheduleInfoPage == null) {
 				throw new SchedulerException(SCHEDULER_SERVICE_ERROR_MESSAGE);
 			}
@@ -191,6 +232,7 @@ public class CloudFoundryAppScheduler implements Scheduler {
 	private void scheduleTask(String appName, String scheduleName,
 			String expression, String command) {
 		logger.debug(String.format("Scheduling Task: ", appName));
+
 		ScheduleJobResponse response = getApplicationByAppName(appName)
 				.flatMap(abstractApplicationSummary -> {
 					return this.client.jobs().create(CreateJobRequest.builder()
@@ -215,7 +257,7 @@ public class CloudFoundryAppScheduler implements Scheduler {
 						throw new CreateScheduleException(scheduleName, e);
 					}
 				})
-				.block(Duration.ofSeconds(schedulerProperties.getScheduleTimeoutInSeconds()));
+				.block(Duration.ofSeconds(this.deploymentProperties.getScheduleTimeoutInSeconds()));
 		if(response == null) {
 			throw new SchedulerException(SCHEDULER_SERVICE_ERROR_MESSAGE);
 		}
@@ -395,7 +437,7 @@ public class CloudFoundryAppScheduler implements Scheduler {
 	private RetryTemplate retryTemplate() {
 		RetryTemplate retryTemplate = new RetryTemplate();
 		SimpleRetryPolicy retryPolicy = new SimpleRetryPolicy(
-				schedulerProperties.getScheduleSSLRetryCount(),
+				this.deploymentProperties.getScheduleSSLRetryCount(),
 				Collections.singletonMap(CloudFoundryScheduleSSLException.class, true));
 		retryTemplate.setRetryPolicy(retryPolicy);
 		return retryTemplate;

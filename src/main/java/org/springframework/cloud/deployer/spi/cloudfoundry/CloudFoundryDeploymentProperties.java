@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2020 the original author or authors.
+ * Copyright 2016-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -211,6 +211,38 @@ public class CloudFoundryDeploymentProperties {
 
 	private Optional<Map<String, String>> env = Optional.empty();
 
+	/**
+	 * Top level prefix for Cloud Foundry related configuration properties.
+	 */
+	public static final String CLOUDFOUNDRY_PROPERTIES = "spring.cloud.scheduler.cloudfoundry";
+
+	/**
+	 * Location of the PCF scheduler REST API enpoint ot use.
+	 */
+	private String schedulerUrl;
+
+	/**
+	 * The number of retries allowed when scheduling a task if an {@link javax.net.ssl.SSLException} is thrown.
+	 */
+	private int scheduleSSLRetryCount = 5;
+
+	/**
+	 * The number of seconds to wait for a unSchedule to complete.
+	 */
+	private int unScheduleTimeoutInSeconds = 30;
+
+	/**
+	 * The number of seconds to wait for a schedule to complete.
+	 * This excludes the time it takes to stage the application on Cloud Foundry.
+	 */
+	private int scheduleTimeoutInSeconds = 30;
+
+	/**
+	 * The number of seconds to wait for a list of schedules to be returned.
+	 */
+	private int listTimeoutInSeconds = 60;
+
+
 	public Set<String> getServices() {
 		return services;
 	}
@@ -415,5 +447,45 @@ public class CloudFoundryDeploymentProperties {
 					return this.env;
 				}
 		).orElse(this.env = Optional.of(Collections.unmodifiableMap(env)));
+	}
+
+	public String getSchedulerUrl() {
+		return schedulerUrl;
+	}
+
+	public void setSchedulerUrl(String schedulerUrl) {
+		this.schedulerUrl = schedulerUrl;
+	}
+
+	public int getScheduleSSLRetryCount() {
+		return scheduleSSLRetryCount;
+	}
+
+	public void setScheduleSSLRetryCount(int scheduleSSLRetryCount) {
+		this.scheduleSSLRetryCount = scheduleSSLRetryCount;
+	}
+
+	public int getUnScheduleTimeoutInSeconds() {
+		return unScheduleTimeoutInSeconds;
+	}
+
+	public void setUnScheduleTimeoutInSeconds(int unScheduleTimeoutInSeconds) {
+		this.unScheduleTimeoutInSeconds = unScheduleTimeoutInSeconds;
+	}
+
+	public int getScheduleTimeoutInSeconds() {
+		return scheduleTimeoutInSeconds;
+	}
+
+	public void setScheduleTimeoutInSeconds(int scheduleTimeoutInSeconds) {
+		this.scheduleTimeoutInSeconds = scheduleTimeoutInSeconds;
+	}
+
+	public int getListTimeoutInSeconds() {
+		return listTimeoutInSeconds;
+	}
+
+	public void setListTimeoutInSeconds(int listTimeoutInSeconds) {
+		this.listTimeoutInSeconds = listTimeoutInSeconds;
 	}
 }

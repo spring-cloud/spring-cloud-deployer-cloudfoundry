@@ -57,7 +57,8 @@ import org.cloudfoundry.operations.applications.Applications;
 import org.cloudfoundry.operations.spaces.SpaceSummary;
 import org.cloudfoundry.operations.spaces.Spaces;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -66,6 +67,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import org.springframework.cloud.deployer.spi.cloudfoundry.CloudFoundryConnectionProperties;
+import org.springframework.cloud.deployer.spi.cloudfoundry.CloudFoundryDeploymentProperties;
 import org.springframework.cloud.deployer.spi.cloudfoundry.CloudFoundryTaskLauncher;
 import org.springframework.cloud.deployer.spi.core.AppDefinition;
 import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
@@ -117,6 +119,10 @@ public class CloudFoundryAppSchedulerTests {
 	@Mock(answer = Answers.RETURNS_SMART_NULLS)
 	private CloudFoundryTaskLauncher taskLauncher;
 
+	private CloudFoundryAppScheduler deprecatedCloudFoundryAppScheduler;
+
+	private CloudFoundryAppScheduler deprecatedNoServiceCloudFoundryAppScheduler;
+
 	private CloudFoundryAppScheduler cloudFoundryAppScheduler;
 
 	private CloudFoundryAppScheduler noServiceCloudFoundryAppScheduler;
@@ -128,6 +134,8 @@ public class CloudFoundryAppSchedulerTests {
 	private CloudFoundryConnectionProperties properties = new CloudFoundryConnectionProperties();
 
 	private CloudFoundrySchedulerProperties schedulerProperties = new CloudFoundrySchedulerProperties();
+
+	private CloudFoundryDeploymentProperties deploymentProperties = new CloudFoundryDeploymentProperties();
 
 	@BeforeEach
 	public void setUp() {
@@ -144,39 +152,48 @@ public class CloudFoundryAppSchedulerTests {
 		this.client = new TestSchedulerClient();
 		this.noServiceClient = new NoServiceTestSchedulerClient();
 
+		this.deprecatedCloudFoundryAppScheduler = new CloudFoundryAppScheduler(this.client, this.operations,
+				this.properties, taskLauncher, schedulerProperties);
+		this.deprecatedNoServiceCloudFoundryAppScheduler = new CloudFoundryAppScheduler(this.noServiceClient, this.operations,
+				this.properties, taskLauncher, schedulerProperties);
 		this.cloudFoundryAppScheduler = new CloudFoundryAppScheduler(this.client, this.operations,
-				this.properties, taskLauncher, schedulerProperties);
+				this.properties, taskLauncher, deploymentProperties);
 		this.noServiceCloudFoundryAppScheduler = new CloudFoundryAppScheduler(this.noServiceClient, this.operations,
-				this.properties, taskLauncher, schedulerProperties);
+				this.properties, taskLauncher, deploymentProperties);
 
 	}
 
-	@Test
-	public void testEmptySchedulerProperties() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testEmptySchedulerProperties(boolean isDeprecated) {
 		Resource resource = new FileSystemResource("src/test/resources/demo-0.0.1-SNAPSHOT.jar");
 		AppDefinition definition = new AppDefinition("bar", null);
-		ScheduleRequest request = new ScheduleRequest(definition, null, null, "testschedule", resource);
+		ScheduleRequest request = (isDeprecated) ? new ScheduleRequest(definition, null, null, null, "testschedule", resource)
+		: new ScheduleRequest(definition, null, (List<String>) null, "testschedule", resource);
 		assertThatThrownBy(() -> {
-			this.cloudFoundryAppScheduler.schedule(request);
+			getCloudFoundryAppScheduler(isDeprecated).schedule(request);
 		}).isInstanceOf(IllegalArgumentException.class);
 	}
 
-	@Test
-	public void testCreateNoCommandLineArgs() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testCreateNoCommandLineArgs(boolean isDeprecated) {
 		Resource resource = new FileSystemResource("src/test/resources/demo-0.0.1-SNAPSHOT.jar");
 
 		mockAppResultsInAppList();
 		AppDefinition definition = new AppDefinition("test-application-1", null);
-		ScheduleRequest request = new ScheduleRequest(definition, getDefaultScheduleProperties(), null, "test-schedule", resource);
+		ScheduleRequest request = (isDeprecated) ? new ScheduleRequest(definition, getDefaultScheduleProperties(),null, null, "test-schedule", resource)
+				: new ScheduleRequest(definition, getDefaultDeploymentProperties(), (List<String>) null, "test-schedule", resource);
 
-		this.cloudFoundryAppScheduler.schedule(request);
+		getCloudFoundryAppScheduler(isDeprecated).schedule(request);
 		assertThat(((TestJobs) this.client.jobs()).getCreateJobResponse().getId()).isEqualTo("test-job-id-1");
 		assertThat(((TestJobs) this.client.jobs()).getCreateJobResponse().getApplicationId()).isEqualTo("test-application-id-1");
 		assertThat(((TestJobs) this.client.jobs()).getCreateJobResponse().getCommand()).isEmpty();
 	}
 
-	@Test
-	public void testInvalidCron() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testInvalidCron(boolean isDeprecated) {
 		Resource resource = new FileSystemResource("src/test/resources/demo-0.0.1-SNAPSHOT.jar");
 
 		mockAppResultsInAppList();
@@ -184,17 +201,21 @@ public class CloudFoundryAppSchedulerTests {
 		Map<String, String> badCronMap = new HashMap<>();
 		badCronMap.put(SchedulerPropertyKeys.CRON_EXPRESSION, BAD_CRON_EXPRESSION);
 
-		ScheduleRequest request = new ScheduleRequest(definition, badCronMap, null, "test-schedule", resource);
+		ScheduleRequest request = (isDeprecated) ? new ScheduleRequest(definition,
+				Collections.singletonMap(SchedulerPropertyKeys.CRON_EXPRESSION, BAD_CRON_EXPRESSION), null, null, "test-schedule", resource)
+		: new ScheduleRequest(definition, Collections.singletonMap(CloudFoundryAppScheduler.CRON_EXPRESSION_KEY, BAD_CRON_EXPRESSION),
+				(List<String>) null, "test-schedule", resource);
 
 		assertThatThrownBy(() -> {
-			this.cloudFoundryAppScheduler.schedule(request);
+			getCloudFoundryAppScheduler(isDeprecated).schedule(request);
 		}).isInstanceOf(CreateScheduleException.class).hasMessageContaining(
 				"Illegal characters for this position: 'FOO'");
 		assertThat(((TestJobs) this.client.jobs()).getCreateJobResponse()).isNull();
 	}
 
-	@Test
-	public void testNameTooLong() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testNameTooLong(boolean isDeprecated) {
 		Resource resource = new FileSystemResource("src/test/resources/demo-0.0.1-SNAPSHOT.jar");
 
 		mockAppResultsInAppList();
@@ -202,14 +223,14 @@ public class CloudFoundryAppSchedulerTests {
 		Map<String, String> cronMap = new HashMap<>();
 		cronMap.put(SchedulerPropertyKeys.CRON_EXPRESSION, DEFAULT_CRON_EXPRESSION);
 
-		ScheduleRequest request = new ScheduleRequest(definition, cronMap, null,
+		ScheduleRequest request = new ScheduleRequest(definition, cronMap, (List<String>) null,
 				"j1-scdf-itcouldbesaidthatthisislongtoowaytoo-oopsitcouldbesaidthatthisis" +
 						"longtoowaytoo-oopsitcouldbesaidthatthisislongtoowaytoo-oopsitcouldbe" +
 						"saidthatthisislongtoowaytoo-oopsitcouldbesaidthatthisislongtoowaytoo-" +
 						"oopsitcouldbesaidthatthisislongtoowaytoo-oops12", resource);
 
 		assertThatThrownBy(() -> {
-			this.cloudFoundryAppScheduler.schedule(request);
+			getCloudFoundryAppScheduler(isDeprecated).schedule(request);
 		}).isInstanceOf(CreateScheduleException.class).hasMessageContaining(
 			"Schedule can not be created because its name " +
 			"'j1-scdf-itcouldbesaidthatthisislongtoowaytoo-oopsitcouldbesaidthatthisis" +
@@ -221,99 +242,112 @@ public class CloudFoundryAppSchedulerTests {
 		assertThat(((TestJobs) this.client.jobs()).getCreateJobResponse()).isNull();
 	}
 
-	@Test
-	public void testSuccessJobCreateFailedSchedule() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testSuccessJobCreateFailedSchedule(boolean isDeprecated) {
 		Resource resource = new FileSystemResource("src/test/resources/demo-0.0.1-SNAPSHOT.jar");
 
 		mockAppResultsInAppList();
 		AppDefinition definition = new AppDefinition("test-application-1", null);
-		Map<String, String> badCronMap = new HashMap<>();
-		badCronMap.put(SchedulerPropertyKeys.CRON_EXPRESSION, CRON_EXPRESSION_FOR_SIX_MIN);
-		ScheduleRequest request = new ScheduleRequest(definition, badCronMap, null, "test-schedule", resource);
+		ScheduleRequest request = (isDeprecated) ? new ScheduleRequest(definition,
+				Collections.singletonMap(SchedulerPropertyKeys.CRON_EXPRESSION, CRON_EXPRESSION_FOR_SIX_MIN), null, null, "test-schedule", resource) :
+				new ScheduleRequest(definition, Collections.singletonMap(CloudFoundryAppScheduler.CRON_EXPRESSION_KEY, CRON_EXPRESSION_FOR_SIX_MIN),
+						(List<String>) null, "test-schedule", resource);
 
 		assertThatThrownBy(() -> {
-			this.cloudFoundryAppScheduler.schedule(request);
+			getCloudFoundryAppScheduler(isDeprecated).schedule(request);
 		}).isInstanceOf(CreateScheduleException.class);
 
 		assertThat(((TestJobs) this.client.jobs()).getCreateJobResponse()).isNull();
 	}
 
 
-	@Test
-	public void testCreateWithCommandLineArgs() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testCreateWithCommandLineArgs(boolean isDeprecated) {
 		Resource resource = new FileSystemResource("src/test/resources/demo-0.0.1-SNAPSHOT.jar");
 
 		mockAppResultsInAppList();
 		AppDefinition definition = new AppDefinition("test-application-1", null);
-		ScheduleRequest request = new ScheduleRequest(definition,
+		ScheduleRequest request = isDeprecated ? new ScheduleRequest(definition,
 				getDefaultScheduleProperties(), null,
-				Collections.singletonList("TestArg"), "test-schedule", resource);
-		this.cloudFoundryAppScheduler.schedule(request);
+				Collections.singletonList("TestArg"), "test-schedule", resource) :
+				new ScheduleRequest(definition,
+						getDefaultDeploymentProperties(),
+						Collections.singletonList("TestArg"), "test-schedule", resource);
+		getCloudFoundryAppScheduler(isDeprecated).schedule(request);
 		ArgumentCaptor<AppDeploymentRequest> argumentCaptor = ArgumentCaptor.forClass(AppDeploymentRequest.class);
 		verify(this.taskLauncher).stage(argumentCaptor.capture());
 		assertThat(argumentCaptor.getValue().getCommandlineArguments().get(0)).isEqualTo("TestArg");
 	}
 
-	@Test
-	public void testList() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testList(boolean isDeprecated) {
 		setupMockResults();
-		List<ScheduleInfo> result = this.cloudFoundryAppScheduler.list();
+		List<ScheduleInfo> result = getCloudFoundryAppScheduler(isDeprecated).list();
 		assertThat(result.size()).isEqualTo(2);
 		verifyScheduleInfo(result.get(0), "test-application-1", "test-job-name-1", DEFAULT_CRON_EXPRESSION);
 		verifyScheduleInfo(result.get(1), "test-application-2", "test-job-name-2", DEFAULT_CRON_EXPRESSION);
 	}
 
-	@Test
-	public void testListWithJobsNoAssociatedSchedule() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testListWithJobsNoAssociatedSchedule(boolean isDeprecated) {
 		setupMockResultsNoScheduleForJobs();
-		List<ScheduleInfo> result = this.cloudFoundryAppScheduler.list();
+		List<ScheduleInfo> result = getCloudFoundryAppScheduler(isDeprecated).list();
 		assertThat(result.size()).isEqualTo(2);
 		verifyScheduleInfo(result.get(0), "test-application-1", "test-job-name-1", null);
 		verifyScheduleInfo(result.get(1), "test-application-2", "test-job-name-2", null);
 	}
 
-	@Test
-	public void testListWithNoSchedules() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testListWithNoSchedules(boolean isDeprecated) {
 		given(this.operations.applications()
 				.list())
 				.willReturn(Flux.empty());
-		List<ScheduleInfo> result = this.cloudFoundryAppScheduler.list();
+		List<ScheduleInfo> result = getCloudFoundryAppScheduler(isDeprecated).list();
 		assertThat(result.size()).isEqualTo(0);
 	}
 
-	@Test
-	public void testListSchedulesWithAppName() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testListSchedulesWithAppName(boolean isDeprecated) {
 		setupMockResults();
-		List<ScheduleInfo> result = this.cloudFoundryAppScheduler.list("test-application-2");
+		List<ScheduleInfo> result = getCloudFoundryAppScheduler(isDeprecated).list("test-application-2");
 		assertThat(result.size()).isEqualTo(1);
 		verifyScheduleInfo(result.get(0), "test-application-2", "test-job-name-2", DEFAULT_CRON_EXPRESSION);
 	}
 
-	@Test
-	public void testListSchedulesWithInvalidAppName() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testListSchedulesWithInvalidAppName(boolean isDeprecated) {
 		setupMockResults();
-		List<ScheduleInfo> result = this.cloudFoundryAppScheduler.list("not-here");
+		List<ScheduleInfo> result = getCloudFoundryAppScheduler(isDeprecated).list("not-here");
 		assertThat(result.size()).isEqualTo(0);
 	}
 
-	@Test
-	public void testUnschedule() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testUnschedule(boolean isDeprecated) {
 		setupMockResults();
-		List<ScheduleInfo> result = this.cloudFoundryAppScheduler.list();
+		List<ScheduleInfo> result = getCloudFoundryAppScheduler(isDeprecated).list();
 		assertThat(result.size()).isEqualTo(2);
-		this.cloudFoundryAppScheduler.unschedule("test-job-name-1");
-		result = this.cloudFoundryAppScheduler.list();
+		getCloudFoundryAppScheduler(isDeprecated).unschedule("test-job-name-1");
+		result = getCloudFoundryAppScheduler(isDeprecated).list();
 		assertThat(result.size()).isEqualTo(1);
 		assertThat(result.get(0).getScheduleName()).isEqualTo("test-job-name-2");
 		assertThat(result.get(0).getTaskDefinitionName()).isEqualTo("test-application-2");
 	}
 
-	@Test
-	public void testMissingScheduleDelete() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testMissingScheduleDelete(boolean isDeprecated) {
 		boolean exceptionFired = false;
 		setupMockResults();
 		try {
-			this.cloudFoundryAppScheduler.unschedule("test-job-name-3");
+			getCloudFoundryAppScheduler(isDeprecated).unschedule("test-job-name-3");
 		}
 		catch (SchedulerException se) {
 			assertThat(se.getMessage()).isEqualTo("Failed to unschedule schedule test-job-name-3 does not exist.");
@@ -322,32 +356,36 @@ public class CloudFoundryAppSchedulerTests {
 		assertThat(exceptionFired).isTrue();
 	}
 
-	@Test
-	public void testNoServiceList() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testNoServiceList(boolean isDeprecated) {
 		assertThatThrownBy(() -> {
-			this.noServiceCloudFoundryAppScheduler.list();
+			getNoServiceCloudFoundryAppScheduler(isDeprecated).list();
 		}).isInstanceOf(SchedulerException.class).hasMessageContaining(
 				"Scheduler Service returned a null response.");
 	}
 
-	@Test
-	public void testNoServiceListSchedulesWithAppName() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testNoServiceListSchedulesWithAppName(boolean isDeprecated) {
 		assertThatThrownBy(() -> {
-			this.noServiceCloudFoundryAppScheduler.list("test-application-2");
+			getNoServiceCloudFoundryAppScheduler(isDeprecated).list("test-application-2");
 		}).isInstanceOf(SchedulerException.class).hasMessageContaining(
 				"Scheduler Service returned a null response.");
 	}
 
-	@Test
-	public void testNoServiceCreate() {
+	@ParameterizedTest
+	@ValueSource(booleans = {true, false})
+	public void testNoServiceCreate(boolean isDeprecated) {
 		Resource resource = new FileSystemResource("src/test/resources/demo-0.0.1-SNAPSHOT.jar");
 
 		mockAppResultsInAppList();
 		AppDefinition definition = new AppDefinition("test-application-1", null);
-		ScheduleRequest request = new ScheduleRequest(definition, getDefaultScheduleProperties(), null, "test-schedule", resource);
+		ScheduleRequest request = (isDeprecated) ? new ScheduleRequest(definition, getDefaultScheduleProperties(), null, null, "test-schedule", resource) :
+		new ScheduleRequest(definition, getDefaultDeploymentProperties(), (List<String>) null, "test-schedule", resource);
 
 		assertThatThrownBy(() -> {
-			this.noServiceCloudFoundryAppScheduler.schedule(request);
+			getNoServiceCloudFoundryAppScheduler(isDeprecated).schedule(request);
 		}).isInstanceOf(SchedulerException.class).hasMessageContaining(
 				"Scheduler Service returned a null response.");
 	}
@@ -601,4 +639,17 @@ public class CloudFoundryAppSchedulerTests {
 		return result;
 	}
 
+	private Map<String, String> getDefaultDeploymentProperties() {
+		Map<String, String> result = new HashMap<>();
+		result.put(CloudFoundryAppScheduler.CRON_EXPRESSION_KEY, DEFAULT_CRON_EXPRESSION);
+		return result;
+	}
+
+	private CloudFoundryAppScheduler getCloudFoundryAppScheduler(boolean isDeprecated) {
+		return isDeprecated ? this.deprecatedCloudFoundryAppScheduler : this.cloudFoundryAppScheduler;
+	}
+
+	private CloudFoundryAppScheduler getNoServiceCloudFoundryAppScheduler(boolean isDeprecated) {
+		return isDeprecated ? this.deprecatedNoServiceCloudFoundryAppScheduler : this.noServiceCloudFoundryAppScheduler;
+	}
 }
