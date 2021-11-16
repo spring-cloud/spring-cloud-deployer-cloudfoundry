@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.compress.utils.Sets;
+import org.assertj.core.data.MapEntry;
 import org.cloudfoundry.client.v2.ClientV2Exception;
 import org.cloudfoundry.operations.CloudFoundryOperations;
 import org.cloudfoundry.operations.applications.ApplicationDetail;
@@ -967,7 +968,8 @@ public class CloudFoundryAppDeployerTests {
 		assertThat(status.getInstances().get("test-application-0").toString())
 				.isEqualTo("CloudFoundryAppInstanceStatus[test-application-0 : deployed]");
 		assertThat(status.getInstances().get("test-application-0").getAttributes())
-				.isEqualTo(Collections.singletonMap("guid", "test-application:0"));
+				.containsExactly(MapEntry.entry("guid", "test-application-id"),
+						MapEntry.entry("index", "0"));
 	}
 
 	@SuppressWarnings("unchecked")
