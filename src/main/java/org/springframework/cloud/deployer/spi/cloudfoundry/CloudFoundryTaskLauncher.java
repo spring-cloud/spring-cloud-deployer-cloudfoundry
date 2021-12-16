@@ -229,6 +229,7 @@ public class CloudFoundryTaskLauncher extends AbstractCloudFoundryTaskLauncher {
 		return requestCreateTask(application.getId(),
 				getCommand(application, request),
 				memory(request),
+				diskQuota(request),
 				request.getDefinition().getName())
 			.map(CreateTaskResponse::getId);
 	}
@@ -257,12 +258,13 @@ public class CloudFoundryTaskLauncher extends AbstractCloudFoundryTaskLauncher {
 			.build());
 	}
 
-	private Mono<CreateTaskResponse> requestCreateTask(String applicationId, String command, int memory, String name) {
+	private Mono<CreateTaskResponse> requestCreateTask(String applicationId, String command, int memory, int disk, String name) {
 		return this.client.tasks()
 			.create(CreateTaskRequest.builder()
 				.applicationId(applicationId)
 				.command(command)
 				.memoryInMb(memory)
+				.diskInMb(disk)
 				.name(name)
 				.build());
 	}
