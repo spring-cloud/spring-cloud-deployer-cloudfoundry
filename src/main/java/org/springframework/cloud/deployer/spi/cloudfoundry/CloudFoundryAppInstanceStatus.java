@@ -96,8 +96,7 @@ public class CloudFoundryAppInstanceStatus implements AppInstanceStatus {
 			}
 		}
 		// TODO cf-java-client versions > 2.8 will have an index formally added ot InstanceDetail
-		attributes.put("guid", applicationDetail.getId());
-		attributes.put("index", String.valueOf(index));
+		attributes.put("guid", applicationDetail.getName() + ":" + index);
 		return attributes;
 	}
 
