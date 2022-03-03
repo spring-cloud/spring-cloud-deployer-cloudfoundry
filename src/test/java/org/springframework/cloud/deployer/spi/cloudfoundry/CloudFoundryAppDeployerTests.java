@@ -935,7 +935,7 @@ public class CloudFoundryAppDeployerTests extends AbstractAppDeployerTestSupport
 				.isEqualTo("CloudFoundryAppInstanceStatus[test-application-0 : deployed]");
 		assertThat(status.getInstances().get("test-application-0").getAttributes())
 				.containsOnly(
-						MapEntry.entry(CloudFoundryAppInstanceStatus.GUID, "test-application-0"),
+						MapEntry.entry(CloudFoundryAppInstanceStatus.GUID, "test-application:0"),
 						MapEntry.entry(CloudFoundryAppInstanceStatus.INDEX, "0"),
 						MapEntry.entry(CloudFoundryAppInstanceStatus.CF_GUID, "test-application-id"));
 	}

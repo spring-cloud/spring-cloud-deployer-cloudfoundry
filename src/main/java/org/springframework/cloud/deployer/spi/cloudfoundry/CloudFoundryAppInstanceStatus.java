@@ -116,7 +116,7 @@ public class CloudFoundryAppInstanceStatus implements AppInstanceStatus {
 		 The deployer GUID must be unique for each app instance, the CloudFoundry GUID is common to all instances of
 		 the same app.
 		 */
-		attributes.put(GUID, getId());
+		attributes.put(GUID, applicationDetail.getName() + ":" + index);
 		attributes.put(CF_GUID, applicationDetail.getId());
 		attributes.put(INDEX, String.valueOf(index));
 		return attributes;

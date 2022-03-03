@@ -118,7 +118,7 @@ public class CloudFoundryActuatorTemplateTests extends AbstractAppDeployerTestSu
 	@Test
 	void actuatorInfo() {
 		Map<String,Object> info = actuatorOperations
-				.getFromActuator("test-application-id", "test-application-0", "/info", Map.class);
+				.getFromActuator("test-application-id", "test-application:0", "/info", Map.class);
 
 		assertThat(((Map<?,?>) (info.get("app"))).get("name")).isEqualTo("log-sink-rabbit");
 	}
@@ -126,7 +126,7 @@ public class CloudFoundryActuatorTemplateTests extends AbstractAppDeployerTestSu
 	@Test
 	void actuatorBindings() {
 		List<?> bindings = actuatorOperations
-				.getFromActuator("test-application-id", "test-application-0", "/bindings", List.class);
+				.getFromActuator("test-application-id", "test-application:0", "/bindings", List.class);
 
 		assertThat(((Map<?,?>) (bindings.get(0))).get("bindingName")).isEqualTo("input");
 	}
@@ -134,14 +134,14 @@ public class CloudFoundryActuatorTemplateTests extends AbstractAppDeployerTestSu
 	@Test
 	void actuatorBindingInput() {
 		Map<String, Object> binding = actuatorOperations
-				.getFromActuator("test-application-id",  "test-application-0", "/bindings/input", Map.class);
+				.getFromActuator("test-application-id",  "test-application:0", "/bindings/input", Map.class);
 		assertThat(binding.get("bindingName")).isEqualTo("input");
 	}
 
 	@Test
 	void actuatorPostBindingInput() {
 		Map<String, Object> state = actuatorOperations
-				.postToActuator("test-application-id",  "test-application-0", "/bindings/input",
+				.postToActuator("test-application-id",  "test-application:0", "/bindings/input",
 						Collections.singletonMap("state", "STOPPED"), Map.class);
 		assertThat(state.get("state")).isEqualTo("STOPPED");
 	}
