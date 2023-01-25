@@ -143,7 +143,7 @@
 					<name>Maven Central</name>
 					<url>https://repo.maven.apache.org/maven2</url>
 					<snapshots>
-						<enabled>true</enabled>
+						<enabled>false</enabled>
 					</snapshots>
 				</repository>
 				<!-- TODO remove once https://github.com/spring-cloud/spring-cloud-dataflow/issues/5194 resolved -->
@@ -178,7 +178,7 @@
 					<name>Maven Central</name>
 					<url>https://repo.maven.apache.org/maven2</url>
 					<snapshots>
-						<enabled>true</enabled>
+						<enabled>false</enabled>
 					</snapshots>
 				</pluginRepository>
 			</pluginRepositories>
