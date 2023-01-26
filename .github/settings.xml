@@ -41,7 +41,7 @@
 				<pluginRepository>
 					<id>spring-staging</id>
 					<name>Spring Staging</name>
-					<url>https://repo.spring.io/plugins-staging</url>
+					<url>https://repo.spring.io/staging</url>
 					<snapshots>
 						<enabled>false</enabled>
 					</snapshots>
@@ -49,7 +49,7 @@
 				<pluginRepository>
 					<id>spring-milestones</id>
 					<name>Spring Milestones</name>
-					<url>https://repo.spring.io/plugins-milestone</url>
+					<url>https://repo.spring.io/milestone</url>
 					<snapshots>
 						<enabled>false</enabled>
 					</snapshots>
@@ -97,7 +97,7 @@
 				<pluginRepository>
 					<id>spring-staging</id>
 					<name>Spring Staging</name>
-					<url>https://repo.spring.io/plugins-staging</url>
+					<url>https://repo.spring.io/staging</url>
 					<snapshots>
 						<enabled>false</enabled>
 					</snapshots>
