@@ -20,7 +20,7 @@
 		<java.version>1.8</java.version>
 		<spring-cloud-deployer.version>2.8.1-SNAPSHOT</spring-cloud-deployer.version>
 		<cloudfoundry-java-lib.version>4.16.0.RELEASE</cloudfoundry-java-lib.version>
-		<pivotal-cf-client-reactor.version>2.1.0.RELEASE</pivotal-cf-client-reactor.version>
+		<pivotal-cf-client-reactor.version>2.2.0.RELEASE</pivotal-cf-client-reactor.version>
 		<okhttp.version>3.14.9</okhttp.version>
 	</properties>
 
@@ -144,15 +144,6 @@
 					<url>https://repo.maven.apache.org/maven2</url>
 					<snapshots>
 						<enabled>false</enabled>
-					</snapshots>
-				</repository>
-				<!-- TODO remove once https://github.com/spring-cloud/spring-cloud-dataflow/issues/5194 resolved -->
-				<repository>
-					<id>maven-central-spring-milestones</id>
-					<name>Maven Central Spring Milestones</name>
-					<url>https://repo.spring.io/libs-milestone</url>
-					<snapshots>
-						<enabled>true</enabled>
 					</snapshots>
 				</repository>
 			</repositories>
